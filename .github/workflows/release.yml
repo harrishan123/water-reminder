@@ -1,0 +1,53 @@
+name: Build Windows EXE
+
+# 触发方式：
+#   1. 推送形如 v1.0.0 的 tag  -> 自动构建并发布到 Release
+#   2. 在 Actions 页面手动点 Run -> 只构建并把产物放到 Artifacts(不发 Release)
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 允许工作流创建 Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: 打包 exe
+        run: pyinstaller build.spec --noconfirm
+
+      - name: 压缩成 zip
+        shell: pwsh
+        run: Compress-Archive -Path "dist/*" -DestinationPath "water-reminder-windows.zip"
+
+      - name: 上传构建产物(Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: water-reminder-windows
+          path: water-reminder-windows.zip
+
+      - name: 发布到 Release(仅 tag 触发时)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" water-reminder-windows.zip \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "自动构建的 Windows 免安装版：解压后双击 喝水提醒.exe 即可运行，无需安装 Python。"
