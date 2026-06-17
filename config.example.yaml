@@ -1,0 +1,53 @@
+# 复制本文件为 config.yaml 后按需修改。config.yaml 已被 .gitignore 忽略，
+# 用于存放含密钥的个人配置。也可不填 ai.api_key，改用环境变量 WATER_AI_API_KEY。
+reminder:
+  interval_minutes: 60
+  cup_ml: 350
+  active_start: '10:00'
+  active_end: '22:00'
+  quiet_start: '12:00'
+  quiet_end: '13:30'
+  quick_amounts:
+  - 100
+  - 150
+  - 200
+  - 250
+profile:
+  weight_kg: 65
+  exercise_level: light   # none / light / moderate / intense
+  daily_goal_ml: 0        # >0 时使用固定目标，0 表示自动计算
+ai:
+  enabled: false
+  api_key: ''             # 留空则读环境变量 WATER_AI_API_KEY
+  base_url: https://co.yes.vg/v1
+  model: gpt-5.5
+  wire_api: responses     # yescode 用 responses；DeepSeek/通义/智谱/Kimi 用 chat
+weather:
+  enabled: true
+  provider: wttr          # wttr(免费免key) / openweather / qweather
+  api_key: ''
+  city: Beijing
+  default_temp_c: 22
+web:
+  enabled: true
+  port: 8765
+  auto_open: false
+report:
+  daily_time: '21:30'
+  weekly_weekday: sun
+  weekly_time: '20:00'
+push:
+  email:
+    enabled: false
+    smtp_host: smtp.qq.com
+    smtp_port: 465
+    use_ssl: true
+    username: ''
+    password: ''
+    to: ''
+  serverchan:
+    enabled: false
+    sendkey: ''
+  pushplus:
+    enabled: false
+    token: ''

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>喝水提醒 · 控制面板</title>
+<style>
+  :root {
+    --blue: #1e90ff;
+    --blue-dark: #1573d6;
+    --bg: #eef5fc;
+    --card: #ffffff;
+    --text: #1f2d3d;
+    --muted: #7a8aa0;
+    --ok: #2bb673;
+    --line: #e6edf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: linear-gradient(160deg, #dcebff 0%, var(--bg) 40%);
+    background-attachment: fixed;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; gap: 10px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 22px; display: flex; align-items: center; gap: 10px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .drop { font-size: 26px; }
+  .badge {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: #e8f0fb; color: var(--blue-dark); font-weight: 600;
+  }
+  .badge.off { background: #f0f0f3; color: var(--muted); }
+  .nav-btn {
+    background: var(--card); color: var(--blue-dark);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; text-decoration: none; transition: .15s;
+  }
+  .nav-btn:hover { background: #e8f0fb; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border-radius: 16px; padding: 20px;
+    box-shadow: 0 6px 24px rgba(30,144,255,.08);
+  }
+  .card + .card, .grid + .card { margin-top: 16px; }
+  .card h2 { font-size: 15px; color: var(--muted); margin-bottom: 14px; font-weight: 600; }
+
+  /* 进度环 */
+  .ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .ring {
+    width: 180px; height: 180px; border-radius: 50%;
+    display: grid; place-items: center; position: relative;
+    background: conic-gradient(var(--blue) 0deg, #e6edf6 0deg);
+    transition: background .6s ease;
+  }
+  .ring::after {
+    content: ""; position: absolute; width: 142px; height: 142px;
+    background: var(--card); border-radius: 50%;
+  }
+  .ring .inner { position: relative; z-index: 1; text-align: center; }
+  .ring .pct { font-size: 32px; font-weight: 700; color: var(--blue-dark); }
+  .ring .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .stat-row { display: flex; gap: 18px; margin-top: 6px; }
+  .stat { text-align: center; }
+  .stat .v { font-size: 18px; font-weight: 700; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+
+  /* 天气卡片 */
+  .weather-wrap { display: flex; flex-direction: column; height: 100%; }
+  .weather-main {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 0 14px;
+  }
+  .weather-icon { font-size: 52px; line-height: 1; }
+  .weather-temp { font-size: 38px; font-weight: 700; color: var(--blue-dark); line-height: 1; }
+  .weather-city { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .info-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 10px 0; border-top: 1px dashed var(--line); font-size: 13px;
+  }
+  .info-row .k { color: var(--muted); }
+  .info-row .v { color: var(--text); font-weight: 600; }
+  .goal-note {
+    font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6;
+    padding: 8px 10px; background: #f7faff; border-radius: 8px;
+  }
+  .weather-disabled {
+    text-align: center; color: var(--muted); font-size: 13px;
+    padding: 30px 10px;
+  }
+
+  /* 按钮 */
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  button {
+    border: none; cursor: pointer; border-radius: 10px; padding: 10px 16px;
+    font-size: 14px; font-weight: 600; font-family: inherit; transition: .15s;
+  }
+  .primary { background: var(--blue); color: #fff; }
+  .primary:hover { background: var(--blue-dark); }
+  .ghost { background: #eef3fb; color: var(--blue-dark); }
+  .ghost:hover { background: #e0eafa; }
+  button:active { transform: scale(.97); }
+  .amount-input {
+    width: 90px; padding: 10px; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 14px; font-family: inherit;
+  }
+
+  /* 周柱状图 */
+  .bars { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding-top: 10px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .bar {
+    width: 100%; max-width: 34px; border-radius: 6px 6px 0 0;
+    background: linear-gradient(var(--blue), #74b9ff); transition: height .5s ease;
+    min-height: 2px;
+  }
+  .bar.ok { background: linear-gradient(var(--ok), #7fd6a8); }
+  .bar-label { font-size: 11px; color: var(--muted); }
+  .bar-val { font-size: 10px; color: var(--muted); }
+  .muted-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* 报告 */
+  .report-box {
+    white-space: pre-wrap; background: #f7faff; border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px; font-size: 13px; line-height: 1.6;
+    margin-top: 12px; min-height: 60px; color: #333;
+  }
+
+  /* 设置页表单 */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+  @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .field input, .field select {
+    padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px;
+    font-size: 14px; font-family: inherit; background: #fff;
+  }
+  .field.full { grid-column: 1 / -1; }
+  fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  legend { font-size: 13px; font-weight: 600; color: var(--blue-dark); padding: 0 8px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1f2d3d; color: #fff; padding: 12px 22px; border-radius: 10px;
+    font-size: 14px; opacity: 0; transition: .3s; pointer-events: none; z-index: 99;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .page { animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ 主页 ============ -->
+  <div id="page-main" class="page">
+    <header>
+      <h1><span class="drop">💧</span> 喝水提醒</h1>
+      <div class="header-right">
+        <span id="aiBadge" class="badge off">AI 未启用</span>
+        <a class="nav-btn" onclick="showPage('settings')">⚙ 设置</a>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- 今日进度 -->
+      <div class="card">
+        <h2>今日进度</h2>
+        <div class="ring-wrap">
+          <div class="ring" id="ring">
+            <div class="inner">
+              <div class="pct" id="pct">0%</div>
+              <div class="sub" id="amounts">0 / 0 ml</div>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><div class="v" id="cups">0</div><div class="k">杯数</div></div>
+            <div class="stat"><div class="v" id="streak">0</div><div class="k">连续达标(天)</div></div>
+            <div class="stat"><div class="v" id="ignored">0</div><div class="k">忽略提醒</div></div>
+          </div>
+        </div>
+        <div class="btns">
+          <button class="primary" onclick="drink()">喝一杯 (<span id="cupMl">250</span>ml)</button>
+          <input class="amount-input" id="customAmount" type="number" placeholder="自定义ml" />
+          <button class="ghost" onclick="drinkCustom()">记录</button>
+          <button class="ghost" onclick="undo()" title="撤销今天最近一次记录">↩ 撤销</button>
+        </div>
+        <div class="btns">
+          <button class="ghost" id="pauseBtn" onclick="togglePause()">暂停提醒</button>
+          <button class="ghost" onclick="recompute()">重算今日目标</button>
+        </div>
+      </div>
+
+      <!-- 今日天气 + 目标说明 -->
+      <div class="card">
+        <h2>今日天气与目标</h2>
+        <div class="weather-wrap" id="weatherCard">
+          <!-- 由 JS 渲染 -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 近 7 天 -->
+    <div class="card">
+      <h2>近 7 天饮水</h2>
+      <div class="bars" id="bars"></div>
+      <div class="muted-note">绿色 = 当天达标，蓝色 = 未达标</div>
+    </div>
+
+    <!-- 报告 -->
+    <div class="card">
+      <h2>报告</h2>
+      <div class="btns">
+        <button class="primary" onclick="genReport('daily')">生成今日报告</button>
+        <button class="ghost" onclick="genReport('weekly')">生成本周报告</button>
+        <button class="ghost" onclick="genReport('daily', true)" title="忽略缓存，重新调用 AI">↻ 重新生成</button>
+      </div>
+      <div class="report-box" id="reportBox">点击上方按钮生成报告（同一天会复用缓存以节省 AI 调用；点「重新生成」可强制刷新。已启用 AI 时含个性化健康建议，并推送到已配置渠道）。</div>
+    </div>
+  </div>
+
+  <!-- ============ 设置页 ============ -->
+  <div id="page-settings" class="page" hidden>
+    <header>
+      <h1><a class="nav-btn" onclick="showPage('main')">← 返回</a> 设置</h1>
+      <div class="header-right">
+        <button class="primary" onclick="saveSettings()">保存设置</button>
+      </div>
+    </header>
+
+    <div class="card">
+      <form id="settingsForm">
+        <fieldset>
+          <legend>提醒</legend>
+          <div class="form-grid">
+            <div class="field"><label>提醒间隔(分钟)</label><input name="reminder.interval_minutes" type="number" /></div>
+            <div class="field"><label>一杯容量(ml)</label><input name="reminder.cup_ml" type="number" /></div>
+            <div class="field"><label>活跃开始</label><input name="reminder.active_start" type="time" /></div>
+            <div class="field"><label>活跃结束</label><input name="reminder.active_end" type="time" /></div>
+            <div class="field"><label>勿扰开始(可空)</label><input name="reminder.quiet_start" type="time" /></div>
+            <div class="field"><label>勿扰结束(可空)</label><input name="reminder.quiet_end" type="time" /></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>个人信息</legend>
+          <div class="form-grid">
+            <div class="field"><label>体重(kg)</label><input name="profile.weight_kg" type="number" /></div>
+            <div class="field"><label>运动量</label>
+              <select name="profile.exercise_level">
+                <option value="none">无</option><option value="light">轻度</option>
+                <option value="moderate">中度</option><option value="intense">高强度</option>
+              </select>
+            </div>
+            <div class="field"><label>固定目标(ml，0=自动)</label><input name="profile.daily_goal_ml" type="number" /></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>AI 大模型</legend>
+          <div class="form-grid">
+            <div class="field"><label>启用 AI</label>
+              <select name="ai.enabled"><option value="true">是</option><option value="false">否</option></select>
+            </div>
+            <div class="field"><label>协议(wire_api)</label>
+              <select name="ai.wire_api">
+                <option value="chat">chat（DeepSeek/通义/智谱/Kimi）</option>
+                <option value="responses">responses（yescode）</option>
+              </select>
+            </div>
+            <div class="field"><label>模型</label><input name="ai.model" type="text" placeholder="gpt-5.5" /></div>
+            <div class="field full"><label>Base URL</label><input name="ai.base_url" type="text" placeholder="https://co.yes.vg/v1" /></div>
+            <div class="field full"><label>API Key</label><input name="ai.api_key" type="password" placeholder="team-... 或 sk-..." /></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>天气(可选)</legend>
+          <div class="form-grid">
+            <div class="field"><label>启用天气</label>
+              <select name="weather.enabled"><option value="true">是</option><option value="false">否</option></select>
+            </div>
+            <div class="field"><label>服务商</label>
+              <select name="weather.provider">
+                <option value="wttr">wttr.in（免费免注册）</option>
+                <option value="openweather">OpenWeather（需key）</option>
+                <option value="qweather">和风天气（需key）</option>
+              </select>
+            </div>
+            <div class="field"><label>城市</label><input name="weather.city" type="text" placeholder="Beijing" /></div>
+            <div class="field"><label>默认气温(°C)</label><input name="weather.default_temp_c" type="number" /></div>
+            <div class="field full"><label>天气 API Key（wttr 不需要）</label><input name="weather.api_key" type="password" /></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>报告时间</legend>
+          <div class="form-grid">
+            <div class="field"><label>日报时间</label><input name="report.daily_time" type="time" /></div>
+            <div class="field"><label>周报时间</label><input name="report.weekly_time" type="time" /></div>
+            <div class="field"><label>周报星期</label>
+              <select name="report.weekly_weekday">
+                <option value="mon">周一</option><option value="tue">周二</option><option value="wed">周三</option>
+                <option value="thu">周四</option><option value="fri">周五</option><option value="sat">周六</option>
+                <option value="sun">周日</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+        <div class="btns">
+          <button type="button" class="primary" onclick="saveSettings()">保存设置</button>
+          <button type="button" class="ghost" onclick="loadConfig()">恢复为已保存</button>
+        </div>
+        <div class="muted-note">保存后立即生效（重新计算调度）。注意：保存会重写 config.yaml，其中的注释会丢失。微信/邮件推送密码请直接在 config.yaml 中填写。</div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function showToast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function showPage(name) {
+  ["main", "settings"].forEach(n => {
+    const el = $("page-" + n);
+    if (n === name) { el.hidden = false; }
+    else { el.hidden = true; }
+  });
+  if (name === "settings") loadConfig();
+  window.scrollTo({ top: 0, behavior: "instant" });
+}
+
+async function api(path, method = "GET", body) {
+  const opt = { method, headers: { "Content-Type": "application/json" } };
+  if (body) opt.body = JSON.stringify(body);
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+function pickWeatherIcon(temp) {
+  if (temp == null) return "🌡️";
+  if (temp >= 32) return "🥵";
+  if (temp >= 26) return "☀️";
+  if (temp >= 18) return "🌤️";
+  if (temp >= 8)  return "⛅";
+  if (temp >= 0)  return "🌧️";
+  return "❄️";
+}
+
+function renderWeather(s) {
+  const w = s.weather || {};
+  const card = $("weatherCard");
+  if (!w.enabled || w.temperature == null) {
+    card.innerHTML = `
+      <div class="weather-disabled">
+        天气未启用或获取失败<br/>
+        <span style="font-size:12px">在设置中启用天气可让饮水目标更精准</span>
+      </div>
+      <div class="info-row"><span class="k">今日目标</span><span class="v">${s.goal} ml</span></div>
+      ${s.goal_note ? `<div class="goal-note">${s.goal_note}</div>` : ""}
+    `;
+    return;
+  }
+  const icon = pickWeatherIcon(w.temperature);
+  const cityLabel = w.city || "未设置";
+  card.innerHTML = `
+    <div class="weather-main">
+      <div class="weather-icon">${icon}</div>
+      <div>
+        <div class="weather-temp">${w.temperature.toFixed(1)}°C</div>
+        <div class="weather-city">${cityLabel} · ${w.provider}</div>
+      </div>
+    </div>
+    <div class="info-row"><span class="k">今日目标</span><span class="v">${s.goal} ml</span></div>
+    <div class="info-row"><span class="k">提醒间隔</span><span class="v">${s.interval_minutes} 分钟</span></div>
+    ${s.goal_note ? `<div class="goal-note">${s.goal_note}</div>` : ""}
+  `;
+}
+
+function renderStatus(s) {
+  const pct = Math.min(s.pct, 100);
+  $("pct").textContent = s.pct + "%";
+  $("amounts").textContent = `${s.total} / ${s.goal} ml`;
+  $("cups").textContent = s.count;
+  $("streak").textContent = s.streak;
+  $("ignored").textContent = s.ignored ?? 0;
+  $("cupMl").textContent = s.cup_ml;
+  const color = s.pct >= 100 ? "#2bb673" : "#1e90ff";
+  $("ring").style.background = `conic-gradient(${color} ${pct * 3.6}deg, #e6edf6 0deg)`;
+  $("pauseBtn").textContent = s.paused ? "恢复提醒" : "暂停提醒";
+  const badge = $("aiBadge");
+  if (s.ai_enabled) { badge.textContent = "AI 已启用"; badge.classList.remove("off"); }
+  else { badge.textContent = "AI 未启用"; badge.classList.add("off"); }
+  renderBars(s.week);
+  renderWeather(s);
+}
+
+function renderBars(week) {
+  const max = Math.max(...week.map(d => Math.max(d.total, d.goal)), 1);
+  $("bars").innerHTML = week.map(d => {
+    const h = Math.round(d.total / max * 100);
+    const day = d.day.slice(5);
+    return `<div class="bar-col">
+      <div class="bar-val">${d.total}</div>
+      <div class="bar ${d.achieved ? "ok" : ""}" style="height:${h}%" title="${d.day}: ${d.total}/${d.goal}ml"></div>
+      <div class="bar-label">${day}</div>
+    </div>`;
+  }).join("");
+}
+
+async function refresh() { renderStatus(await api("/api/status")); }
+
+async function drink() { renderStatus(await api("/api/drink", "POST", {})); showToast("已记录一杯 💧"); }
+async function drinkCustom() {
+  const v = parseInt($("customAmount").value);
+  if (!v || v <= 0) { showToast("请输入有效的毫升数"); return; }
+  renderStatus(await api("/api/drink", "POST", { amount: v }));
+  $("customAmount").value = ""; showToast(`已记录 ${v}ml`);
+}
+async function undo() {
+  const r = await api("/api/undo", "POST", {});
+  renderStatus(r);
+  showToast(r.undone != null ? `已撤销 ${r.undone}ml` : "今天没有可撤销的记录");
+}
+async function togglePause() { await api("/api/pause", "POST", {}); refresh(); }
+async function recompute() {
+  const r = await api("/api/goal/recompute", "POST", {});
+  showToast("今日目标更新为 " + r.goal + "ml");
+  refresh();
+}
+
+async function genReport(kind, force = false) {
+  $("reportBox").textContent = force ? "重新生成中…" : "生成中…";
+  const r = await api("/api/report/" + kind, "POST", { force });
+  $("reportBox").textContent = r.content || "(无内容)";
+  showToast(force ? "已重新生成并推送" : "报告已生成并推送");
+}
+
+async function loadConfig() {
+  const cfg = await api("/api/config");
+  const form = $("settingsForm");
+  for (const section in cfg) {
+    for (const key in cfg[section]) {
+      const el = form.elements[`${section}.${key}`];
+      if (!el) continue;
+      let val = cfg[section][key];
+      if (el.tagName === "SELECT" && (val === true || val === false)) val = String(val);
+      el.value = val == null ? "" : val;
+    }
+  }
+}
+
+function collectConfig() {
+  const form = $("settingsForm");
+  const out = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    const [section, key] = el.name.split(".");
+    out[section] = out[section] || {};
+    let v = el.value;
+    if (v === "true") v = true; else if (v === "false") v = false;
+    out[section][key] = v;
+  }
+  return out;
+}
+
+async function saveSettings() {
+  const r = await api("/api/config", "POST", collectConfig());
+  if (r.ok) { showToast("设置已保存并生效"); refresh(); }
+  else showToast("保存失败: " + (r.error || "未知错误"));
+}
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

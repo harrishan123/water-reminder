@@ -1,0 +1,8 @@
+pystray>=0.19.5
+Pillow>=10.0.0
+win11toast>=0.34
+APScheduler>=3.10.4
+PyYAML>=6.0.1
+requests>=2.31.0
+openai>=1.30.0
+Flask>=3.0.0
