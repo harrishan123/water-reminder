@@ -468,7 +468,7 @@ function renderHealth(s) {
   if (!h.conditions) { wrap.style.display = "none"; return; }
   wrap.style.display = "";
   let html = "";
-  if (h.needs_doctor) html += `<div class="health-warn">⚠️ 你的情况可能需要控制饮水，请以医生意见为准。</div>`;
+  if (h.needs_doctor) html += `<div class="health-warn">⚠️ 你填写的情况建议咨询专业医生，请以医生意见为准（详见下方注意事项）。</div>`;
   if (h.rhythm) html += `<div class="health-rhythm">🕒 ${esc(h.rhythm)}</div>`;
   if (h.tips && h.tips.length) html += "<ul class='health-tips'>" + h.tips.map(t => `<li>${esc(t)}</li>`).join("") + "</ul>";
   if (h.caution) html += `<div class="health-caution">${esc(h.caution)}</div>`;
