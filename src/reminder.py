@@ -12,6 +12,7 @@ from datetime import date, datetime, time, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
 
+from . import __version__
 from .ai import goal as goal_mod
 from .ai import report as report_mod
 from .ai.client import build_client
@@ -30,6 +31,13 @@ REMINDER_LINES = [
 ]
 
 
+def _in_time_window(t: time, start: time, end: time) -> bool:
+    """t 是否落在 [start, end] 区间内，支持跨午夜(start>end，如 22:00–02:00)。"""
+    if start <= end:
+        return start <= t <= end
+    return t >= start or t <= end
+
+
 class AppService:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -41,7 +49,8 @@ class AppService:
         self.on_progress_changed = None  # 可选回调，进度变化时调用
         self.on_reminder = None  # 可选回调，到提醒时间时调用(弹小面板)
         self.last_reminder_text = ""  # 最近一次提醒文案，供小面板展示
-        self._ignored_count = 0  # 本次启动后未响应的提醒数
+        self._ignored_count = 0  # 当天未响应的提醒数
+        self._ignored_day = date.today()  # 计数对应的日期(跨天清零)
         self._cached_temp: float | None = None  # 当日气温缓存
         self._cached_temp_day: date | None = None  # 气温缓存对应的日期(跨天失效)
         self._report_cache: dict[tuple, str] = {}  # 报告缓存 {(kind, 日期): 文本}
@@ -178,9 +187,10 @@ class AppService:
             "count": count,
             "pct": pct,
             "cup_ml": int(self.cfg.get("reminder.cup_ml", 250)),
+            "version": __version__,
             "paused": self._paused,
             "streak": self.storage.current_streak(),
-            "ignored": self._ignored_count,
+            "ignored": self.ignored_count,
             "ai_enabled": self.ai.is_enabled(),
             "week": self.storage.week_summary(),
             "hourly": self.storage.hourly_distribution(),
@@ -301,21 +311,29 @@ class AppService:
             body = self.last_reminder_text + "\n" + self.progress_text()
             self.notifier.show_reminder("喝水提醒", body, on_drink=self.drink)
 
+    @property
+    def ignored_count(self) -> int:
+        """当天的忽略次数(跨天自动清零)。"""
+        if self._ignored_day != date.today():
+            self._ignored_day = date.today()
+            self._ignored_count = 0
+        return self._ignored_count
+
     def report_ignored(self) -> None:
         """面板被关闭却没记录喝水时调用(默认视为没喝)。"""
-        self._ignored_count += 1
+        self._ignored_count = self.ignored_count + 1  # 经 property 先做跨天清零
         log.info("提醒被忽略(默认未喝水)，今日累计 %s 次", self._ignored_count)
 
     def _within_active_hours(self, now: datetime | None = None) -> bool:
         now_t = (now or datetime.now()).time()
         start = self.cfg.parse_time("reminder.active_start", "09:00") or time(9, 0)
         end = self.cfg.parse_time("reminder.active_end", "22:00") or time(22, 0)
-        if not (start <= now_t <= end):
+        if not _in_time_window(now_t, start, end):  # 支持跨午夜时段
             return False
-        # 勿扰时段
+        # 勿扰时段(同样支持跨午夜)
         q_start = self.cfg.parse_time("reminder.quiet_start", "")
         q_end = self.cfg.parse_time("reminder.quiet_end", "")
-        if q_start and q_end and q_start <= now_t <= q_end:
+        if q_start and q_end and _in_time_window(now_t, q_start, q_end):
             return False
         return True
 
@@ -325,7 +343,7 @@ class AppService:
         key = ("daily", date.today().isoformat())
         if force or key not in self._report_cache:
             self._report_cache[key] = report_mod.build_daily_report(
-                self.storage, self.ai, ignored=self._ignored_count
+                self.storage, self.ai, ignored=self.ignored_count
             )
         content = self._report_cache[key]
         self.notifier.push_report("喝水日报", content)

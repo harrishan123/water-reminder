@@ -188,6 +188,7 @@
     <header>
       <h1><span class="drop">💧</span> 喝水提醒</h1>
       <div class="header-right">
+        <span id="verTag" class="badge" style="background:#eef3fb;color:#7a8aa0"></span>
         <span id="aiBadge" class="badge off">AI 未启用</span>
         <a class="nav-btn" onclick="showPage('settings')">⚙ 设置</a>
       </div>
@@ -447,6 +448,7 @@ function renderStatus(s) {
   $("streak").textContent = s.streak;
   $("ignored").textContent = s.ignored ?? 0;
   $("cupMl").textContent = s.cup_ml;
+  if (s.version) $("verTag").textContent = "v" + s.version;
   const color = s.pct >= 100 ? "#2bb673" : "#1e90ff";
   $("ring").style.background = `conic-gradient(${color} ${pct * 3.6}deg, #e6edf6 0deg)`;
   $("pauseBtn").textContent = s.paused ? "恢复提醒" : "暂停提醒";

@@ -11,6 +11,7 @@ from typing import Callable
 
 import pystray
 
+from . import __version__
 from .icon import drop_image
 
 log = logging.getLogger("water.tray")
@@ -21,7 +22,7 @@ class Tray:
         self.service = service
         self._on_activate = on_activate
         self._on_quit = on_quit
-        self.icon = pystray.Icon("water_reminder", drop_image(64), "喝水提醒")
+        self.icon = pystray.Icon("water_reminder", drop_image(64), f"喝水提醒 v{__version__}")
         self.icon.menu = self._build_menu()
         self._thread: threading.Thread | None = None
 
