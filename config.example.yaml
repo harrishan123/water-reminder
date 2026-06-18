@@ -16,6 +16,8 @@ profile:
   weight_kg: 65
   exercise_level: light   # none / light / moderate / intense
   daily_goal_ml: 0        # >0 时使用固定目标，0 表示自动计算
+  health_conditions: []   # 常见健康状况(列表)，如 [尿酸偏高, 低血糖]；AI 会据此调整目标与建议
+  health_notes: ''        # 自由文本补充，如 "经常熬夜、咖啡喝得多"
 ai:
   enabled: false
   api_key: ''             # 留空则读环境变量 WATER_AI_API_KEY

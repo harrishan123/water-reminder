@@ -22,7 +22,7 @@ STATIC_DIR = resource_path("src", "web", "static")
 # 允许通过 Web 表单编辑的配置字段(白名单，防止写入任意键)
 EDITABLE_PATHS = {
     "reminder": ["interval_minutes", "cup_ml", "active_start", "active_end", "quiet_start", "quiet_end"],
-    "profile": ["weight_kg", "exercise_level", "daily_goal_ml"],
+    "profile": ["weight_kg", "exercise_level", "daily_goal_ml", "health_conditions", "health_notes"],
     "ai": ["enabled", "api_key", "base_url", "model", "wire_api"],
     "weather": ["enabled", "provider", "api_key", "city", "default_temp_c"],
     "report": ["daily_time", "weekly_weekday", "weekly_time"],

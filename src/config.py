@@ -29,6 +29,8 @@ DEFAULTS: dict[str, Any] = {
         "weight_kg": 65,
         "exercise_level": "light",
         "daily_goal_ml": 0,
+        "health_conditions": [],   # 勾选的常见健康状况(字符串列表)
+        "health_notes": "",        # 自由文本补充
     },
     "ai": {
         "enabled": False,

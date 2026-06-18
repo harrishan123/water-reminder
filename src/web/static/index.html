@@ -127,6 +127,28 @@
   .bar-val { font-size: 10px; color: var(--muted); }
   .muted-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
 
+  /* 健康建议 */
+  .health-rhythm { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+  .health-tips { margin: 6px 0 6px 20px; font-size: 13px; color: var(--text); line-height: 1.7; }
+  .health-caution {
+    font-size: 13px; color: #8a5a00; background: #fff7e6; border: 1px solid #ffe2a8;
+    border-radius: 8px; padding: 8px 10px; margin-top: 8px;
+  }
+  .health-warn {
+    font-size: 13px; color: #a02020; background: #fdeaea; border: 1px solid #f6c2c2;
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-weight: 600;
+  }
+  .check-grid { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+  .check-grid label {
+    display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text);
+    cursor: pointer; padding: 4px 0;
+  }
+  .check-grid input { width: 15px; height: 15px; accent-color: var(--blue); }
+  textarea.notes {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px;
+    font-size: 14px; font-family: inherit; resize: vertical;
+  }
+
   /* 报告 */
   .report-box {
     white-space: pre-wrap; background: #f7faff; border: 1px solid var(--line);
@@ -216,6 +238,12 @@
       <div class="muted-note">绿色 = 当天达标，蓝色 = 未达标</div>
     </div>
 
+    <!-- 健康建议 -->
+    <div class="card" id="healthCardWrap" style="display:none">
+      <h2>健康建议</h2>
+      <div id="healthCard"></div>
+    </div>
+
     <!-- 报告 -->
     <div class="card">
       <h2>报告</h2>
@@ -262,6 +290,26 @@
             </div>
             <div class="field"><label>固定目标(ml，0=自动)</label><input name="profile.daily_goal_ml" type="number" /></div>
           </div>
+        </fieldset>
+        <fieldset>
+          <legend>健康状况（AI 据此调整目标与提醒）</legend>
+          <div class="check-grid">
+            <label><input type="checkbox" name="profile.health_conditions" value="尿酸偏高/痛风" /> 尿酸偏高/痛风</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="肾结石" /> 肾结石</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="低血糖" /> 低血糖</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="糖尿病" /> 糖尿病</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="高血压" /> 高血压</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="高血脂" /> 高血脂</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="便秘" /> 便秘</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="皮肤干燥" /> 皮肤干燥</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="运动多/出汗多" /> 运动多/出汗多</label>
+            <label><input type="checkbox" name="profile.health_conditions" value="咖啡或茶较多" /> 咖啡或茶较多</label>
+          </div>
+          <div class="field full" style="margin-top:10px">
+            <label>其他补充（自由填写）</label>
+            <textarea class="notes" name="profile.health_notes" rows="2" placeholder="如：经常熬夜、孕期、正在服药……"></textarea>
+          </div>
+          <div class="muted-note">⚠️ 仅为 AI 健康提示，非医疗诊断；肾病/心衰等需限水的情况请遵医嘱。需启用下方 AI 才生效。</div>
         </fieldset>
         <fieldset>
           <legend>AI 大模型</legend>
@@ -407,6 +455,26 @@ function renderStatus(s) {
   else { badge.textContent = "AI 未启用"; badge.classList.add("off"); }
   renderBars(s.week);
   renderWeather(s);
+  renderHealth(s);
+}
+
+function esc(t) {
+  return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderHealth(s) {
+  const h = s.health || {};
+  const wrap = $("healthCardWrap");
+  if (!h.conditions) { wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  let html = "";
+  if (h.needs_doctor) html += `<div class="health-warn">⚠️ 你的情况可能需要控制饮水，请以医生意见为准。</div>`;
+  if (h.rhythm) html += `<div class="health-rhythm">🕒 ${esc(h.rhythm)}</div>`;
+  if (h.tips && h.tips.length) html += "<ul class='health-tips'>" + h.tips.map(t => `<li>${esc(t)}</li>`).join("") + "</ul>";
+  if (h.caution) html += `<div class="health-caution">${esc(h.caution)}</div>`;
+  if (!h.analyzed) html += `<div class="muted-note">已填写健康状况，但未启用 AI；启用后才能获得针对性建议。</div>`;
+  if (h.disclaimer) html += `<div class="muted-note">${esc(h.disclaimer)}</div>`;
+  wrap.querySelector("#healthCard").innerHTML = html;
 }
 
 function renderBars(week) {
@@ -455,9 +523,15 @@ async function loadConfig() {
   const form = $("settingsForm");
   for (const section in cfg) {
     for (const key in cfg[section]) {
+      let val = cfg[section][key];
+      if (Array.isArray(val)) {  // 勾选框组(健康状况)
+        form.querySelectorAll(`input[name="${section}.${key}"]`).forEach(cb => {
+          cb.checked = val.includes(cb.value);
+        });
+        continue;
+      }
       const el = form.elements[`${section}.${key}`];
       if (!el) continue;
-      let val = cfg[section][key];
       if (el.tagName === "SELECT" && (val === true || val === false)) val = String(val);
       el.value = val == null ? "" : val;
     }
@@ -471,6 +545,11 @@ function collectConfig() {
     if (!el.name) continue;
     const [section, key] = el.name.split(".");
     out[section] = out[section] || {};
+    if (el.type === "checkbox") {  // 勾选框组 -> 数组
+      if (!Array.isArray(out[section][key])) out[section][key] = [];
+      if (el.checked) out[section][key].push(el.value);
+      continue;
+    }
     let v = el.value;
     if (v === "true") v = true; else if (v === "false") v = false;
     out[section][key] = v;

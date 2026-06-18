@@ -50,6 +50,15 @@ class Storage:
             )
             """
         )
+        # 每日健康方案(AI 分析结果的 JSON)，每天一条，避免重复调用 AI
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_plan (
+                day TEXT PRIMARY KEY,
+                plan_json TEXT NOT NULL
+            )
+            """
+        )
         self._conn.commit()
 
     # ---------- 写入 ----------
@@ -86,7 +95,31 @@ class Storage:
             )
             self._conn.commit()
 
+    def set_plan(self, plan_json: str, day: date | None = None) -> None:
+        day = day or date.today()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO daily_plan (day, plan_json) VALUES (?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET plan_json=excluded.plan_json",
+                (day.isoformat(), plan_json),
+            )
+            self._conn.commit()
+
+    def clear_plan(self, day: date | None = None) -> None:
+        day = day or date.today()
+        with self._lock:
+            self._conn.execute("DELETE FROM daily_plan WHERE day=?", (day.isoformat(),))
+            self._conn.commit()
+
     # ---------- 读取 ----------
+    def get_plan(self, day: date | None = None) -> Optional[str]:
+        day = day or date.today()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT plan_json FROM daily_plan WHERE day=?", (day.isoformat(),)
+            ).fetchone()
+        return row["plan_json"] if row else None
+
     def get_goal(self, day: date | None = None) -> Optional[int]:
         day = day or date.today()
         with self._lock:
