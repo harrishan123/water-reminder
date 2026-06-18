@@ -15,39 +15,35 @@
 - **报告推送**：邮件 / 微信（Server酱 / PushPlus）
 - **可选天气接入**（wttr / OpenWeather / 和风），让目标更精准
 
-## 安装
+## 安装与运行
+
+### 方式一：下载免安装版（推荐，无需 Python）
+
+适合直接使用，**不用安装 Python 或任何依赖**：
+
+1. 打开仓库的 **Releases** 页，下载最新的 `water-reminder-windows.zip`
+2. 解压到任意位置（比如桌面）
+3. 双击文件夹里的 **`喝水提醒.exe`** 即可运行
+
+程序会在 exe 同级目录自动生成 `config.yaml`（首次为默认配置，可用记事本编辑）和 `data\`（喝水记录）。整个文件夹可随意移动，但 exe 不能单独拎出来（依赖在旁边的 `_internal\` 里）。
+
+> 想用 AI 功能：编辑 exe 旁边的 `config.yaml`，把 `ai.enabled` 设为 `true` 并填入 `api_key` 等（见下方「配置」）。
+
+### 方式二：从源码运行（开发者）
 
 需要 Python 3.10+。
 
 ```powershell
 cd "C:\Users\youku\Desktop\喝水提醒"
 pip install -r requirements.txt
+copy config.example.yaml config.yaml   # 首次使用，复制一份配置后按需编辑
 ```
 
-首次使用复制一份配置：
+`config.yaml` 已被 `.gitignore` 忽略，用于存放含密钥的个人配置。然后任选一种启动：
 
 ```powershell
-copy config.example.yaml config.yaml
-```
-
-然后按需编辑 `config.yaml`（该文件已被 `.gitignore` 忽略，用于存放含密钥的个人配置）。
-
-## 运行
-
-### 方式一：桌面快捷方式（推荐，无终端黑窗）
-
-先生成一次启动器与桌面快捷方式：
-
-```powershell
-python -m src.shortcut
-```
-
-之后双击桌面的「喝水提醒」图标即可启动。
-
-### 方式二：命令行
-
-```powershell
-python -m src.main
+python -m src.shortcut   # 生成桌面快捷方式，之后双击图标启动(无终端黑窗)
+python -m src.main       # 或直接命令行启动
 ```
 
 启动后程序进入系统托盘（右下角）。左键点击水滴图标弹出小面板，右键打开菜单。
