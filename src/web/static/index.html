@@ -166,6 +166,16 @@
   }
   .today-del:hover { text-decoration: underline; }
 
+  /* 今日饮水安排(按时段) */
+  .phase-list { display: flex; flex-direction: column; gap: 12px; }
+  .phase-item { display: flex; flex-direction: column; gap: 4px; }
+  .phase-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .phase-label { font-size: 13px; color: var(--text); }
+  .phase-ml { font-size: 15px; font-weight: 700; color: var(--blue-dark); white-space: nowrap; }
+  .phase-bar-wrap { background: #e6edf6; border-radius: 6px; height: 8px; overflow: hidden; }
+  .phase-bar { height: 100%; background: linear-gradient(90deg, var(--blue), #74b9ff); }
+  .phase-hint { font-size: 11px; color: var(--muted); }
+
   /* 报告 */
   .report-box {
     white-space: pre-wrap; background: #f7faff; border: 1px solid var(--line);
@@ -247,6 +257,13 @@
           <!-- 由 JS 渲染 -->
         </div>
       </div>
+    </div>
+
+    <!-- 今日饮水安排(按时段) -->
+    <div class="card" id="phasesWrap" style="display:none">
+      <h2>今日饮水安排（按时段）</h2>
+      <div id="phases" class="phase-list"></div>
+      <div class="muted-note">全天目标按上班前 / 上班时段 / 下班后分配；你主要在上班时段统计，照这个时段的量喝即可。</div>
     </div>
 
     <!-- 近 7 天 -->
@@ -486,7 +503,22 @@ function renderStatus(s) {
   else { badge.textContent = "AI 未启用"; badge.classList.add("off"); }
   renderBars(s.week);
   renderWeather(s);
+  renderPhases(s);
   renderHealth(s);
+}
+
+function renderPhases(s) {
+  const ph = s.phases || [];
+  const wrap = $("phasesWrap");
+  if (!ph.length) { wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  const max = Math.max(...ph.map(p => p.ml || 0), 1);
+  $("phases").innerHTML = ph.map(p => `
+    <div class="phase-item">
+      <div class="phase-top"><span class="phase-label">${esc(p.label)}</span><span class="phase-ml">${p.ml} ml</span></div>
+      <div class="phase-bar-wrap"><div class="phase-bar" style="width:${Math.round((p.ml || 0) / max * 100)}%"></div></div>
+      ${p.hint ? `<div class="phase-hint">${esc(p.hint)}</div>` : ""}
+    </div>`).join("");
 }
 
 function esc(t) {

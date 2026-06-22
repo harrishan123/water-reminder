@@ -17,9 +17,19 @@
 
 ## 安装与运行
 
-### 方式一：下载免安装版（推荐，无需 Python）
+### 方式一：Scoop 一行安装（推荐，自动更新）
 
-适合直接使用，**不用安装 Python 或任何依赖**：
+装过 [Scoop](https://scoop.sh) 的话，一行命令搞定，之后 `scoop update` 可升级：
+
+```powershell
+scoop install https://raw.githubusercontent.com/harrishan123/water-reminder/main/scoop/water-reminder.json
+```
+
+安装后开始菜单会有「喝水提醒」快捷方式；配置与喝水记录通过 Scoop 的 persist 保留，升级不丢。
+
+### 方式二：下载免安装版（无需 Python）
+
+不想装 Scoop 也行，**不用安装 Python 或任何依赖**：
 
 1. 打开仓库的 **Releases** 页，下载最新的 `water-reminder-windows.zip`
 2. 解压到任意位置（比如桌面）

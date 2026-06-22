@@ -1,0 +1,32 @@
+{
+    "version": "0.3.0",
+    "description": "Windows 托盘喝水提醒：AI 智能目标、健康状况定制、日报/周报，免安装。",
+    "homepage": "https://github.com/harrishan123/water-reminder",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/harrishan123/water-reminder/releases/download/v0.3.0/water-reminder-windows.zip",
+            "hash": "1df0614d9be3c34322581ad277ffa3b23ea959976b223841dc18bb6df008c821",
+            "extract_dir": "喝水提醒"
+        }
+    },
+    "shortcuts": [
+        [
+            "喝水提醒.exe",
+            "喝水提醒"
+        ]
+    ],
+    "persist": [
+        "config.yaml",
+        "data"
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/harrishan123/water-reminder/releases/download/v$version/water-reminder-windows.zip",
+                "extract_dir": "喝水提醒"
+            }
+        }
+    }
+}

@@ -40,12 +40,15 @@ class TestFormulaGoal(unittest.TestCase):
 class TestFallbackPlan(unittest.TestCase):
     def test_fallback_shape(self):
         # ai_client=None -> 走兜底，返回完整结构
-        plan = goal_mod.compute_plan(None, 70, "light", 22, "尿酸偏高")
-        for key in ("goal_ml", "note", "rhythm", "tips", "caution", "needs_doctor", "reminder_lines"):
+        plan = goal_mod.compute_plan(None, 70, "light", 22, "尿酸偏高", "10:00", "22:00")
+        for key in ("goal_ml", "note", "rhythm", "tips", "caution", "needs_doctor", "reminder_lines", "phases"):
             self.assertIn(key, plan)
         self.assertGreaterEqual(plan["goal_ml"], goal_mod.GOAL_MIN)
         # 填了健康状况但无 AI -> caution 提示
         self.assertTrue(plan["caution"])
+        # 分段：三段且总和约等于目标
+        self.assertEqual(len(plan["phases"]), 3)
+        self.assertAlmostEqual(sum(p["ml"] for p in plan["phases"]), plan["goal_ml"], delta=100)
 
 
 class TestTimeWindow(unittest.TestCase):

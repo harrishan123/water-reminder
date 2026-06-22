@@ -111,7 +111,11 @@ class AppService:
         weight = float(self.cfg.get("profile.weight_kg", 65))
         level = str(self.cfg.get("profile.exercise_level", "light"))
         health = self._health_text()
-        plan = goal_mod.compute_plan(self.ai, weight, level, temp or 0.0, health)
+        active_start = str(self.cfg.get("reminder.active_start", "") or "")
+        active_end = str(self.cfg.get("reminder.active_end", "") or "")
+        plan = goal_mod.compute_plan(
+            self.ai, weight, level, temp or 0.0, health, active_start, active_end
+        )
 
         fixed = int(self.cfg.get("profile.daily_goal_ml", 0) or 0)
         if fixed > 0:  # 用户设了固定目标，则覆盖 AI 的数值(但保留建议/提醒)
@@ -215,6 +219,7 @@ class AppService:
             "hourly": self.storage.hourly_distribution(),
             "interval_minutes": int(self.cfg.get("reminder.interval_minutes", 60)),
             "goal_note": info["note"],
+            "phases": plan.get("phases", []),  # 全天目标按 上班前/时段/后 的分配
             "weather": {
                 "enabled": bool(self.cfg.get("weather.enabled", False)),
                 "city": str(self.cfg.get("weather.city", "")),
