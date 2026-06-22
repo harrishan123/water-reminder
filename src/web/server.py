@@ -53,6 +53,17 @@ def create_app(service) -> Flask:
         amount = service.undo_last_drink()
         return jsonify({"undone": amount, **service.status()})
 
+    @app.route("/api/history")
+    def api_history():
+        return jsonify({"intakes": service.today_intakes(), "month": service.month_summary(30)})
+
+    @app.route("/api/intake/delete", methods=["POST"])
+    def api_delete_intake():
+        data = request.get_json(silent=True) or {}
+        intake_id = data.get("id")
+        amount = service.delete_intake(int(intake_id)) if intake_id is not None else None
+        return jsonify({"deleted": amount, **service.status()})
+
     @app.route("/api/pause", methods=["POST"])
     def api_pause():
         paused = service.toggle_pause()

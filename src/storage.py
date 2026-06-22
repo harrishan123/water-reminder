@@ -71,6 +71,60 @@ class Storage:
             )
             self._conn.commit()
 
+    def list_intakes(self, day: date | None = None) -> list[dict]:
+        """返回某天的全部喝水明细 [{id, time, amount_ml}]，按时间正序。"""
+        day = day or date.today()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, ts, amount_ml FROM intake WHERE day=? ORDER BY id",
+                (day.isoformat(),),
+            ).fetchall()
+        out = []
+        for r in rows:
+            try:
+                hm = datetime.fromisoformat(r["ts"]).strftime("%H:%M")
+            except ValueError:
+                hm = ""
+            out.append({"id": int(r["id"]), "time": hm, "amount_ml": int(r["amount_ml"])})
+        return out
+
+    def delete_intake(self, intake_id: int) -> Optional[int]:
+        """按 id 删除一条喝水记录，返回被删的毫升数；不存在返回 None。"""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT amount_ml FROM intake WHERE id=?", (int(intake_id),)
+            ).fetchone()
+            if not row:
+                return None
+            self._conn.execute("DELETE FROM intake WHERE id=?", (int(intake_id),))
+            self._conn.commit()
+            return int(row["amount_ml"])
+
+    def range_summary(self, days: int = 30, end_day: date | None = None) -> dict:
+        """返回最近 N 天的汇总：{days, total, avg, achieved_days, tracked_days}。"""
+        end_day = end_day or date.today()
+        days = max(1, int(days))
+        total = 0
+        achieved = 0
+        tracked = 0
+        with self._lock:
+            for offset in range(days):
+                d = end_day - timedelta(days=offset)
+                t = self.total_for_day(d)
+                g = self.get_goal(d) or 0
+                total += t
+                if g:  # 当天设过目标才算入"有记录"
+                    tracked += 1
+                    if t >= g:
+                        achieved += 1
+        return {
+            "days": days,
+            "total": total,
+            "avg": int(total / days),
+            "achieved_days": achieved,
+            "tracked_days": tracked,
+        }
+
     def delete_last_intake(self, day: date | None = None) -> Optional[int]:
         """删除指定日期最近一条喝水记录，返回其毫升数；无记录返回 None。"""
         day = day or date.today()

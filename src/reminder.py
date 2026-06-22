@@ -169,6 +169,25 @@ class AppService:
             self.on_progress_changed()
         return amount
 
+    def today_intakes(self) -> list[dict]:
+        """今日喝水明细列表(供网页查看/逐条删除)。"""
+        return self.storage.list_intakes()
+
+    def delete_intake(self, intake_id: int) -> int | None:
+        """按 id 删除一条记录，返回被删毫升数(不存在返回 None)。"""
+        amount = self.storage.delete_intake(intake_id)
+        if amount is None:
+            return None
+        log.info("删除一条记录 %sml", amount)
+        self._report_cache.clear()
+        if callable(self.on_progress_changed):
+            self.on_progress_changed()
+        return amount
+
+    def month_summary(self, days: int = 30) -> dict:
+        """最近 N 天汇总(供网页趋势卡片)。"""
+        return self.storage.range_summary(days)
+
     def progress_text(self) -> str:
         s = self.status()
         return f"今日 {s['total']}/{s['goal']}ml ({s['pct']}%) · {s['count']} 杯"

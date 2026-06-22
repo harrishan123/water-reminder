@@ -119,6 +119,24 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(len(week), 7)
         self.assertEqual(week[-1]["total"], 500)
 
+    def test_list_and_delete_intake(self):
+        self.s.add_intake(200)
+        self.s.add_intake(150)
+        items = self.s.list_intakes()
+        self.assertEqual(len(items), 2)
+        self.assertEqual(self.s.delete_intake(items[0]["id"]), 200)
+        self.assertEqual(self.s.count_for_day(), 1)
+        self.assertIsNone(self.s.delete_intake(999999))
+
+    def test_range_summary(self):
+        self.s.set_goal(1000)
+        self.s.add_intake(1000)
+        r = self.s.range_summary(30)
+        self.assertEqual(r["days"], 30)
+        self.assertEqual(r["achieved_days"], 1)
+        self.assertEqual(r["tracked_days"], 1)
+        self.assertGreaterEqual(r["total"], 1000)
+
     def test_plan_roundtrip(self):
         self.assertIsNone(self.s.get_plan())
         self.s.set_plan('{"goal_ml": 2500}')

@@ -149,6 +149,23 @@
     font-size: 14px; font-family: inherit; resize: vertical;
   }
 
+  /* 近30天 + 今日记录 */
+  .month-stats { display: flex; gap: 22px; flex-wrap: wrap; padding-top: 4px; }
+  .month-stats .m { text-align: center; }
+  .month-stats .mv { font-size: 22px; font-weight: 700; color: var(--blue-dark); }
+  .month-stats .mk { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .today-list { max-height: 220px; overflow-y: auto; }
+  .today-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 2px; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .today-row:last-child { border-bottom: none; }
+  .today-del {
+    color: #a04040; cursor: pointer; background: none; border: none;
+    font-size: 13px; padding: 2px 6px;
+  }
+  .today-del:hover { text-decoration: underline; }
+
   /* 报告 */
   .report-box {
     white-space: pre-wrap; background: #f7faff; border: 1px solid var(--line);
@@ -237,6 +254,18 @@
       <h2>近 7 天饮水</h2>
       <div class="bars" id="bars"></div>
       <div class="muted-note">绿色 = 当天达标，蓝色 = 未达标</div>
+    </div>
+
+    <!-- 近 30 天 + 今日记录 -->
+    <div class="grid">
+      <div class="card">
+        <h2>近 30 天</h2>
+        <div id="monthStats" class="month-stats"></div>
+      </div>
+      <div class="card">
+        <h2>今日记录</h2>
+        <div id="todayList" class="today-list"></div>
+      </div>
     </div>
 
     <!-- 健康建议 -->
@@ -494,23 +523,42 @@ function renderBars(week) {
 
 async function refresh() { renderStatus(await api("/api/status")); }
 
-async function drink() { renderStatus(await api("/api/drink", "POST", {})); showToast("已记录一杯 💧"); }
+async function loadHistory() {
+  const r = await api("/api/history");
+  const m = r.month || {};
+  $("monthStats").innerHTML =
+    `<div class="m"><div class="mv">${m.achieved_days || 0}/${m.tracked_days || 0}</div><div class="mk">达标天数</div></div>` +
+    `<div class="m"><div class="mv">${m.avg || 0}</div><div class="mk">日均(ml)</div></div>` +
+    `<div class="m"><div class="mv">${((m.total || 0) / 1000).toFixed(1)}</div><div class="mk">总量(L)</div></div>`;
+  const list = r.intakes || [];
+  $("todayList").innerHTML = list.length
+    ? list.map(it => `<div class="today-row"><span>🕐 ${it.time} · ${it.amount_ml}ml</span><button class="today-del" onclick="delIntake(${it.id})">删除</button></div>`).join("")
+    : `<div class="muted-note">今天还没有记录</div>`;
+}
+async function delIntake(id) {
+  const r = await api("/api/intake/delete", "POST", { id });
+  renderStatus(r); loadHistory();
+  showToast(r.deleted != null ? `已删除 ${r.deleted}ml` : "删除失败");
+}
+
+async function drink() { renderStatus(await api("/api/drink", "POST", {})); loadHistory(); showToast("已记录一杯 💧"); }
 async function drinkCustom() {
   const v = parseInt($("customAmount").value);
   if (!v || v <= 0) { showToast("请输入有效的毫升数"); return; }
   renderStatus(await api("/api/drink", "POST", { amount: v }));
+  loadHistory();
   $("customAmount").value = ""; showToast(`已记录 ${v}ml`);
 }
 async function undo() {
   const r = await api("/api/undo", "POST", {});
-  renderStatus(r);
+  renderStatus(r); loadHistory();
   showToast(r.undone != null ? `已撤销 ${r.undone}ml` : "今天没有可撤销的记录");
 }
 async function togglePause() { await api("/api/pause", "POST", {}); refresh(); }
 async function recompute() {
   const r = await api("/api/goal/recompute", "POST", {});
   showToast("今日目标更新为 " + r.goal + "ml");
-  refresh();
+  refresh(); loadHistory();
 }
 
 async function genReport(kind, force = false) {
@@ -566,6 +614,7 @@ async function saveSettings() {
 }
 
 refresh();
+loadHistory();
 setInterval(refresh, 15000);
 </script>
 </body>

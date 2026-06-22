@@ -48,6 +48,12 @@ class Tray:
             pystray.MenuItem("生成本周报告", self._on_weekly_report),
             pystray.MenuItem("重新计算今日目标", self._on_recompute_goal),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "开机自启",
+                self._on_toggle_autostart,
+                checked=lambda item: self._autostart_enabled(),
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", self._on_quit_clicked),
         )
 
@@ -100,6 +106,23 @@ class Tray:
 
     def _on_recompute_goal(self, icon, item) -> None:
         self._run_bg(self.service.recompute_goal, "recompute-goal")
+
+    def _autostart_enabled(self) -> bool:
+        from . import autostart
+
+        try:
+            return autostart.is_enabled()
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _on_toggle_autostart(self, icon, item) -> None:
+        from . import autostart
+
+        try:
+            autostart.toggle()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("切换开机自启失败: %s", exc)
+        self._refresh()
 
     def _on_quit_clicked(self, icon, item) -> None:
         icon.stop()

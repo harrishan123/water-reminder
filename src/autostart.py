@@ -11,26 +11,53 @@ from __future__ import annotations
 import os
 import sys
 
+from .paths import is_frozen
+
 APP_NAME = "WaterReminder"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
-def _run_command() -> str:
-    """返回开机要执行的命令。优先用 pythonw(无控制台窗口)。"""
+def _registry_command() -> str:
+    """返回写入注册表 Run 键的开机启动命令。
+
+    打包态(exe)：直接运行 exe 自身(它按 exe 同级目录读写 config/data)。
+    源码态：用 pythonw 无黑窗启动，并先切到项目目录保证相对路径正确。
+    """
+    if is_frozen():
+        return f'"{sys.executable}"'
     pyw = sys.executable
-    # 尝试用同目录下的 pythonw.exe，避免弹出黑窗
     candidate = os.path.join(os.path.dirname(pyw), "pythonw.exe")
     if os.path.exists(candidate):
         pyw = candidate
-    return f'"{pyw}" -m src.main'
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return f'cmd /c "cd /d "{root}" && "{pyw}" -m src.main"'
+
+
+def is_enabled() -> bool:
+    """当前是否已设置开机自启。"""
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as key:
+            winreg.QueryValueEx(key, APP_NAME)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def toggle() -> bool:
+    """切换开机自启，返回切换后的状态(True=已启用)。"""
+    if is_enabled():
+        disable()
+        return False
+    enable()
+    return True
 
 
 def enable() -> None:
     import winreg
 
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # 用 cmd 切到项目目录再启动，确保相对路径(config/data)正确
-    cmd = f'cmd /c "cd /d "{root}" && {_run_command()}"'
+    cmd = _registry_command()
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
         winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, cmd)
     print(f"已启用开机自启: {cmd}")
