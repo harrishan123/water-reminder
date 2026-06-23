@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import logging
 import queue
+import threading
 import tkinter as tk
+from tkinter import simpledialog
 
 log = logging.getLogger("water.panel")
 
@@ -92,6 +94,22 @@ class MiniPanel:
         )
         self.undo_lbl.pack(pady=(2, 0))
         self.undo_lbl.bind("<Button-1>", lambda e: self._on_undo())
+
+        # 起床/上/下班打卡
+        work_row = tk.Frame(self.card, bg=BG)
+        work_row.pack(pady=(4, 0))
+        wake = tk.Label(work_row, text="☀️ 起床", bg=BG, fg=BLUE_DARK,
+                        font=(FONT, 9), cursor="hand2")
+        wake.pack(side="left", padx=8)
+        wake.bind("<Button-1>", self._on_wake)
+        clock_in = tk.Label(work_row, text="🕘 上班", bg=BG, fg=BLUE_DARK,
+                            font=(FONT, 9), cursor="hand2")
+        clock_in.pack(side="left", padx=8)
+        clock_in.bind("<Button-1>", self._on_clock_in)
+        clock_out = tk.Label(work_row, text="🌙 下班", bg=BG, fg=BLUE_DARK,
+                             font=(FONT, 9), cursor="hand2")
+        clock_out.pack(side="left", padx=8)
+        clock_out.bind("<Button-1>", self._on_clock_out)
 
         # 快捷毫升按钮行
         self.quick_row = tk.Frame(self.card, bg=BG)
@@ -274,6 +292,65 @@ class MiniPanel:
         self.refresh()
         if amount is None:
             self.stat_lbl.config(text="今天没有可撤销的记录")
+
+    def _on_wake(self, _event=None) -> None:
+        self.service.wake_up()
+        mt = self.service.morning_target()
+        self.service.notifier.show_message(
+            "早安 ☀️",
+            f"上班前这段建议喝约 {mt}ml，先来一杯吧 💧" if mt else "起床先喝一杯水 💧",
+        )
+        self._responded = True
+        self.refresh()
+
+    def _on_clock_in(self, _event=None) -> None:
+        """弹出预设菜单选择上班前喝了多少。"""
+        menu = tk.Menu(self.root, tearoff=0)
+        for ml in (0, 200, 350, 500):
+            label = "没喝" if ml == 0 else f"{ml}ml"
+            menu.add_command(label=f"上班前 {label}", command=lambda v=ml: self._do_clock_in(v))
+        menu.add_separator()
+        menu.add_command(label="自定义…", command=self._clock_in_custom)
+        try:
+            menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
+        finally:
+            menu.grab_release()
+
+    def _clock_in_custom(self) -> None:
+        ml = simpledialog.askinteger("上班打卡", "上班前喝了多少 ml？", parent=self.root, minvalue=0, maxvalue=3000)
+        if ml is not None:
+            self._do_clock_in(ml)
+
+    def _do_clock_in(self, ml: int) -> None:
+        self.service.clock_in(ml)
+        self._responded = True
+        self.refresh()
+
+    def _on_clock_out(self, _event=None) -> None:
+        """弹出预设菜单选择几点睡，再后台算下班后建议。"""
+        menu = tk.Menu(self.root, tearoff=0)
+        for bt in ("22:30", "23:00", "23:30", "00:00"):
+            menu.add_command(label=f"今晚约 {bt} 睡", command=lambda v=bt: self._do_clock_out(v))
+        try:
+            menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
+        finally:
+            menu.grab_release()
+
+    def _do_clock_out(self, bedtime: str) -> None:
+        self._responded = True
+
+        def _job():
+            try:
+                ws = self.service.clock_out(bedtime)
+                aw = (ws or {}).get("after_work") or {}
+                self.service.notifier.show_message(
+                    "下班后安排",
+                    f"还需再喝约 {aw.get('after_ml', 0)}ml\n{aw.get('advice', '')}",
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("下班打卡失败: %s", exc)
+
+        threading.Thread(target=_job, daemon=True, name="panel-clockout").start()
 
     def _on_left_action(self) -> None:
         # reminder 模式下是「还没喝」；normal 模式下是「暂停/恢复提醒」

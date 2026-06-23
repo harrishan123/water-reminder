@@ -38,6 +38,19 @@ class Tray:
             pystray.MenuItem("打开小面板", self._activate),
             pystray.MenuItem("喝一杯", self._on_drink),
             pystray.MenuItem("撤销上一杯", self._on_undo),
+            pystray.MenuItem("我起床了", self._on_wake),
+            pystray.MenuItem("我上班了", pystray.Menu(
+                pystray.MenuItem("上班前：没喝", self._clock_in_action(0)),
+                pystray.MenuItem("上班前：200ml", self._clock_in_action(200)),
+                pystray.MenuItem("上班前：350ml", self._clock_in_action(350)),
+                pystray.MenuItem("上班前：500ml", self._clock_in_action(500)),
+            )),
+            pystray.MenuItem("我下班了", pystray.Menu(
+                pystray.MenuItem("今晚约 22:30 睡", self._clock_out_action("22:30")),
+                pystray.MenuItem("今晚约 23:00 睡", self._clock_out_action("23:00")),
+                pystray.MenuItem("今晚约 23:30 睡", self._clock_out_action("23:30")),
+                pystray.MenuItem("今晚约 00:00 睡", self._clock_out_action("00:00")),
+            )),
             pystray.MenuItem(
                 lambda item: "恢复提醒" if self.service.paused else "暂停提醒",
                 self._on_toggle_pause,
@@ -87,6 +100,34 @@ class Tray:
     def _on_undo(self, icon, item) -> None:
         self.service.undo_last_drink()
         self._refresh()
+
+    def _on_wake(self, icon, item) -> None:
+        self.service.wake_up()
+        mt = self.service.morning_target()
+        self.service.notifier.show_message(
+            "早安 ☀️",
+            f"上班前这段建议喝约 {mt}ml，先来一杯吧 💧" if mt else "起床先喝一杯水 💧",
+        )
+        self._refresh()
+
+    def _clock_in_action(self, ml: int):
+        def _handler(icon, item) -> None:
+            self.service.clock_in(ml)
+            self._refresh()
+        return _handler
+
+    def _clock_out_action(self, bedtime: str):
+        def _handler(icon, item) -> None:
+            # 会调 AI，放后台线程，完成后弹通知告知建议
+            def _job():
+                ws = self.service.clock_out(bedtime)
+                aw = (ws or {}).get("after_work") or {}
+                self.service.notifier.show_message(
+                    "下班后安排",
+                    f"还需再喝约 {aw.get('after_ml', 0)}ml\n{aw.get('advice', '')}",
+                )
+            self._run_bg(_job, "clock-out")
+        return _handler
 
     def _on_toggle_pause(self, icon, item) -> None:
         self.service.toggle_pause()

@@ -53,6 +53,29 @@ def create_app(service) -> Flask:
         amount = service.undo_last_drink()
         return jsonify({"undone": amount, **service.status()})
 
+    @app.route("/api/wake", methods=["POST"])
+    def api_wake():
+        service.wake_up()
+        return jsonify(service.status())
+
+    @app.route("/api/clock-in", methods=["POST"])
+    def api_clock_in():
+        data = request.get_json(silent=True) or {}
+        pre = data.get("pre_work_ml", 0)
+        try:
+            pre = int(pre)
+        except (TypeError, ValueError):
+            pre = 0
+        service.clock_in(pre)
+        return jsonify(service.status())
+
+    @app.route("/api/clock-out", methods=["POST"])
+    def api_clock_out():
+        data = request.get_json(silent=True) or {}
+        bedtime = str(data.get("bedtime", "23:00") or "23:00")
+        work = service.clock_out(bedtime)
+        return jsonify({"work": work, **service.status()})
+
     @app.route("/api/history")
     def api_history():
         return jsonify({"intakes": service.today_intakes(), "month": service.month_summary(30)})

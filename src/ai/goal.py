@@ -168,6 +168,65 @@ def compute_plan(
     }
 
 
+def compute_after_work(
+    ai_client,
+    goal_ml: int,
+    drunk_ml: int,
+    now_hm: str,
+    bedtime_hm: str,
+    health: str = "",
+) -> dict:
+    """下班后到睡前的补水建议。返回 {after_ml, advice, remaining, drunk, goal}。
+
+    after_ml 夹在 [0, 剩余目标]，避免建议超过当天还差的量；睡前少喝的节奏由 advice 给出。
+    """
+    remaining = max(0, int(goal_ml) - int(drunk_ml))
+    health = (health or "").strip()
+
+    def _result(after_ml: int, advice: str) -> dict:
+        return {
+            "after_ml": int(max(0, min(remaining, after_ml))),
+            "advice": advice,
+            "remaining": remaining,
+            "drunk": int(drunk_ml),
+            "goal": int(goal_ml),
+        }
+
+    # 兜底：建议把剩余的喝完(但单次别太猛)，睡前 1 小时收尾
+    fallback = _result(
+        remaining,
+        "分 2–3 次慢慢喝，睡前 1 小时尽量不再大量喝水，减少夜起。"
+        if remaining > 0 else "今天目标已达成，睡前小口润润即可。",
+    )
+    if ai_client is None or not ai_client.is_enabled():
+        return fallback
+
+    system = (
+        "你是健康饮水教练。用户下班了，请根据其今日已喝水量、目标、当前时间和大致睡觉时间，"
+        "建议下班后到睡前还应再喝多少毫升、怎么分配。注意：睡前1小时少喝以免夜尿；"
+        "若已接近或达到目标就不必勉强多喝；有健康状况(如尿酸需多喝、肾病需限水)要体现，限水情况从保守。"
+        '只返回 JSON：{"after_ml": 整数(下班后建议再喝的总量), "advice": "一两句节奏建议"}。'
+    )
+    user = (
+        f"今日已喝: {drunk_ml} ml\n"
+        f"今日目标: {goal_ml} ml\n"
+        f"当前时间: {now_hm}\n"
+        f"大约睡觉时间: {bedtime_hm}\n"
+        f"健康状况: {health or '无特殊'}\n"
+        "请给出下班后补水建议。"
+    )
+    text = ai_client.chat(system, user, temperature=0.5)
+    parsed = _extract_json(text) if text else None
+    if isinstance(parsed, dict) and "after_ml" in parsed:
+        try:
+            after_ml = int(float(parsed["after_ml"]))
+        except (TypeError, ValueError):
+            return fallback
+        advice = str(parsed.get("advice", "")).strip() or fallback["advice"]
+        return _result(after_ml, advice)
+    return fallback
+
+
 def _extract_json(text: str) -> dict | None:
     """从可能含多余文本的回复中提取第一个 JSON 对象。"""
     try:

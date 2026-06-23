@@ -176,6 +176,24 @@
   .phase-bar { height: 100%; background: linear-gradient(90deg, var(--blue), #74b9ff); }
   .phase-hint { font-size: 11px; color: var(--muted); }
 
+  /* 上/下班 + 下班后安排 */
+  .aw-big { font-size: 26px; font-weight: 700; color: var(--blue-dark); }
+  .aw-sub { font-size: 13px; color: var(--muted); margin: 2px 0 10px; }
+  .aw-advice { font-size: 13px; color: var(--text); line-height: 1.7; background: #f7faff;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+
+  /* 选择弹窗 */
+  .modal-mask { position: fixed; inset: 0; background: rgba(20,30,50,.35);
+    display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: #fff; border-radius: 16px; padding: 22px; width: 320px; max-width: 90vw;
+    box-shadow: 0 12px 40px rgba(0,0,0,.2); }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+  .modal-options { display: flex; flex-wrap: wrap; gap: 10px; }
+  .modal-options button { background: #eef3fb; color: var(--blue-dark); }
+  .modal-custom { display: flex; gap: 8px; margin-top: 12px; }
+  .modal-custom input { flex: 1; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; font-size: 14px; }
+  .modal-cancel { text-align: center; color: var(--muted); margin-top: 14px; cursor: pointer; font-size: 13px; }
+
   /* 报告 */
   .report-box {
     white-space: pre-wrap; background: #f7faff; border: 1px solid var(--line);
@@ -248,6 +266,12 @@
           <button class="ghost" id="pauseBtn" onclick="togglePause()">暂停提醒</button>
           <button class="ghost" onclick="recompute()">重算今日目标</button>
         </div>
+        <div class="btns">
+          <button class="ghost" onclick="wakeUp()">☀️ 我起床了</button>
+          <button class="ghost" onclick="clockInFlow()">🕘 我上班了</button>
+          <button class="ghost" onclick="clockOutFlow()">🌙 我下班了</button>
+        </div>
+        <div id="workState" class="muted-note"></div>
       </div>
 
       <!-- 今日天气 + 目标说明 -->
@@ -257,6 +281,12 @@
           <!-- 由 JS 渲染 -->
         </div>
       </div>
+    </div>
+
+    <!-- 下班后安排 -->
+    <div class="card" id="afterWorkWrap" style="display:none">
+      <h2>下班后安排</h2>
+      <div id="afterWork"></div>
     </div>
 
     <!-- 今日饮水安排(按时段) -->
@@ -420,6 +450,19 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- 选择弹窗(上班前喝多少 / 几点睡) -->
+<div class="modal-mask" id="modalMask" style="display:none">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-options" id="modalOptions"></div>
+    <div class="modal-custom" id="modalCustom" style="display:none">
+      <input id="modalCustomInput" />
+      <button class="primary" onclick="modalPickCustom()">确定</button>
+    </div>
+    <div class="modal-cancel" onclick="closeModal()">取消</div>
+  </div>
+</div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -501,10 +544,12 @@ function renderStatus(s) {
   const badge = $("aiBadge");
   if (s.ai_enabled) { badge.textContent = "AI 已启用"; badge.classList.remove("off"); }
   else { badge.textContent = "AI 未启用"; badge.classList.add("off"); }
+  if (s.quick_amounts && s.quick_amounts.length) _quickAmounts = s.quick_amounts;
   renderBars(s.week);
   renderWeather(s);
   renderPhases(s);
   renderHealth(s);
+  renderWork(s);
 }
 
 function renderPhases(s) {
@@ -586,6 +631,77 @@ async function undo() {
   renderStatus(r); loadHistory();
   showToast(r.undone != null ? `已撤销 ${r.undone}ml` : "今天没有可撤销的记录");
 }
+// ---- 选择弹窗：items=[{label,value}]，onPick(value)；customType: 'number'|'time'|null ----
+let _modalPick = null, _modalCustomType = null;
+function openChooser(title, items, onPick, customType) {
+  $("modalTitle").textContent = title;
+  $("modalOptions").innerHTML = items.map((it, i) =>
+    `<button class="ghost" onclick="modalChoose(${i})">${it.label}</button>`).join("");
+  window._modalItems = items; _modalPick = onPick; _modalCustomType = customType || null;
+  const cust = $("modalCustom");
+  if (customType) {
+    cust.style.display = "flex";
+    const inp = $("modalCustomInput");
+    inp.type = customType === "time" ? "time" : "number";
+    inp.placeholder = customType === "time" ? "自定义时间" : "自定义ml";
+    inp.value = "";
+  } else { cust.style.display = "none"; }
+  $("modalMask").style.display = "flex";
+}
+function closeModal() { $("modalMask").style.display = "none"; _modalPick = null; }
+function modalChoose(i) { const v = window._modalItems[i].value; const cb = _modalPick; closeModal(); if (cb) cb(v); }
+function modalPickCustom() {
+  const raw = $("modalCustomInput").value;
+  if (!raw) return;
+  const v = _modalCustomType === "number" ? parseInt(raw) : raw;
+  if (_modalCustomType === "number" && (!v || v <= 0)) { showToast("请输入有效毫升数"); return; }
+  const cb = _modalPick; closeModal(); if (cb) cb(v);
+}
+
+let _quickAmounts = [100, 150, 200, 250];
+async function wakeUp() {
+  const s = await api("/api/wake", "POST", {});
+  renderStatus(s);
+  const mt = s.morning_target || 0;
+  showToast(mt > 0 ? `早安☀️ 上班前这段建议喝约 ${mt}ml，先来一杯吧` : "早安☀️ 起床先喝一杯水");
+}
+function clockInFlow() {
+  const opts = [{ label: "没喝", value: 0 }].concat(_quickAmounts.map(a => ({ label: a + "ml", value: a })));
+  openChooser("上班前喝了多少？", opts, async (ml) => {
+    renderStatus(await api("/api/clock-in", "POST", { pre_work_ml: ml }));
+    loadHistory();
+    showToast(ml > 0 ? `已记上班前 ${ml}ml` : "已打卡上班");
+  }, "number");
+}
+function clockOutFlow() {
+  const opts = ["22:00", "22:30", "23:00", "23:30", "00:00"].map(t => ({ label: t, value: t }));
+  openChooser("大概几点睡？", opts, async (bt) => {
+    showToast("正在计算下班后安排…");
+    const r = await api("/api/clock-out", "POST", { bedtime: bt });
+    renderStatus(r);
+    showToast("已生成下班后安排");
+  }, "time");
+}
+
+function renderWork(s) {
+  const w = s.work || {};
+  const st = $("workState");
+  const parts = [];
+  if (w.wake) parts.push(`起床 ${w.wake}`);
+  if (w.clock_in) parts.push(`上班 ${w.clock_in}` + (w.pre_ml ? `（前 ${w.pre_ml}ml）` : ""));
+  if (w.clock_out) parts.push(`下班 ${w.clock_out}`);
+  st.textContent = parts.join(" · ");
+  const aw = w.after_work;
+  const wrap = $("afterWorkWrap");
+  if (aw) {
+    wrap.style.display = "";
+    $("afterWork").innerHTML =
+      `<div class="aw-big">还需 ${aw.after_ml} ml</div>` +
+      `<div class="aw-sub">今日已喝 ${aw.drunk} / 目标 ${aw.goal} ml · 下班 ${w.clock_out}</div>` +
+      `<div class="aw-advice">${esc(aw.advice || "")}</div>`;
+  } else { wrap.style.display = "none"; }
+}
+
 async function togglePause() { await api("/api/pause", "POST", {}); refresh(); }
 async function recompute() {
   const r = await api("/api/goal/recompute", "POST", {});
