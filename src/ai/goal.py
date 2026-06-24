@@ -42,34 +42,54 @@ def _clamp_goal(value) -> int:
         return GOAL_MIN
 
 
-def _split_phases(goal: int, active_start: str, active_end: str) -> list[dict]:
-    """把全天目标按比例拆成 上班前/上班时段/上班后 三段(无 AI 时的兜底)。"""
-    before = int(round(goal * 0.25 / 50) * 50)
-    after = int(round(goal * 0.20 / 50) * 50)
+def _hm_to_min(hm) -> int | None:
+    try:
+        h, m = str(hm).split(":")
+        return int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+
+
+def split_phases(
+    goal: int,
+    active_start: str,
+    active_end: str,
+    wake: str = "",
+    bedtime: str = "",
+) -> list[dict]:
+    """按各时段的实际时长把全天目标加权分配到 上班前/上班时段/下班后。
+
+    上班前 = 起床→上班(知道起床时间就用真实窗口，否则默认 90 分钟)；
+    下班后 = 下班→睡觉(知道睡觉时间就用真实窗口，否则默认 90 分钟)。
+    时长越短分得越少——解决"上班前只有一个多小时却要喝 600ml"的问题。
+    """
+    a = _hm_to_min(active_start)
+    e = _hm_to_min(active_end)
+    if a is None:
+        a = 9 * 60
+    if e is None:
+        e = 22 * 60
+    w = _hm_to_min(wake)
+    b = _hm_to_min(bedtime)
+
+    before_min = (a - w) if (w is not None and 0 < a - w <= 360) else 90
+    after_min = (b - e) if (b is not None and 0 < b - e <= 360) else 90
+    during_min = max(60, e - a)
+    total = before_min + during_min + after_min
+
+    before = int(round(goal * before_min / total / 50) * 50)
+    after = int(round(goal * after_min / total / 50) * 50)
     during = goal - before - after
-    s = active_start or "上班前"
-    e = active_end or "下班"
+
+    s = active_start or "上班"
+    en = active_end or "下班"
+    bw = f"{wake}~{s}" if wake else f"起床~{s}"
+    aw = f"{en}~{bedtime}" if bedtime else f"{en}~睡前"
     return [
-        {"label": f"上班前(起床~{s})", "ml": before, "hint": "起床一杯 + 早餐时补水"},
-        {"label": f"上班时段({s}~{e})", "ml": during, "hint": "每 1–2 小时一杯，少量多次"},
-        {"label": f"下班后({e}~睡前)", "ml": after, "hint": "睡前 1 小时别喝太多，减少夜尿"},
+        {"label": f"上班前({bw})", "ml": before, "hint": "起床后先喝一杯，分次补水"},
+        {"label": f"上班时段({s}~{en})", "ml": during, "hint": "每 1–2 小时一杯，少量多次"},
+        {"label": f"下班后({aw})", "ml": after, "hint": "晚间分散喝，睡前别猛灌"},
     ]
-
-
-def _normalize_phases(raw, goal: int, active_start: str, active_end: str) -> list[dict]:
-    """规整 AI 返回的 phases；缺失或不合法则用比例兜底。"""
-    out = []
-    for p in raw or []:
-        if not isinstance(p, dict):
-            continue
-        label = str(p.get("label", "")).strip()
-        try:
-            ml = int(float(p.get("ml")))
-        except (TypeError, ValueError):
-            continue
-        if label and ml >= 0:
-            out.append({"label": label, "ml": ml, "hint": str(p.get("hint", "")).strip()})
-    return out if len(out) >= 2 else _split_phases(goal, active_start, active_end)
 
 
 def _fallback_plan(
@@ -90,7 +110,7 @@ def _fallback_plan(
         "caution": caution,
         "needs_doctor": False,
         "reminder_lines": [],  # 空 -> 调用方回退到通用提醒语
-        "phases": _split_phases(goal, active_start, active_end),
+        "phases": split_phases(goal, active_start, active_end),
     }
 
 
@@ -117,17 +137,13 @@ def compute_plan(
         "你是专业的健康饮水顾问。根据用户的身体信息和健康状况，给出今日饮水方案。"
         "注意安全：饮水并非越多越好——肾功能不全、心力衰竭、透析、低钠血症等情况需要限制饮水，"
         "遇到这类情况请把 needs_doctor 设为 true，并在 caution 里提示就医，不要擅自给出过低或危险的数值。"
-        "用户主要在上班/活跃时段内记录喝水，所以请把全天目标拆成三段(上班前、上班时段、下班后)，"
-        "三段 ml 之和约等于 goal_ml，方便用户对照。"
         "只返回 JSON，不要多余文字，格式严格为："
         '{"goal_ml": 整数(1200-4000), '
         '"rhythm": "一句话喝水节奏建议", '
         '"tips": ["针对其健康状况的具体提示", ...](1-4条，没有则空数组), '
         '"caution": "需要注意或就医的提醒，没有则空字符串", '
         '"needs_doctor": true或false, '
-        '"reminder_lines": ["亲切的提醒语，结合其健康状况，不要出现具体毫升数字", ...](3-5条，每条不超过30字), '
-        '"phases": [{"label":"上班前(起床~上班)","ml":整数,"hint":"简短提示"}, '
-        '{"label":"上班时段","ml":整数,"hint":"..."}, {"label":"下班后(~睡前)","ml":整数,"hint":"..."}]}'
+        '"reminder_lines": ["亲切的提醒语，结合其健康状况，不要出现具体毫升数字", ...](3-5条，每条不超过30字)}'
     )
     window = f"{active_start or '上午'}–{active_end or '晚上'}"
     user = (
@@ -153,7 +169,7 @@ def compute_plan(
     caution = str(parsed.get("caution", "")).strip()
     needs_doctor = bool(parsed.get("needs_doctor", False))
     lines = [str(s).strip() for s in (parsed.get("reminder_lines") or []) if str(s).strip()][:5]
-    phases = _normalize_phases(parsed.get("phases"), goal, active_start, active_end)
+    phases = split_phases(goal, active_start, active_end)  # 分段用确定的时长加权，不靠 AI
 
     note = rhythm if not health else f"已结合健康状况：{rhythm}"
     return {

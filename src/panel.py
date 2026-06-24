@@ -95,13 +95,9 @@ class MiniPanel:
         self.undo_lbl.pack(pady=(2, 0))
         self.undo_lbl.bind("<Button-1>", lambda e: self._on_undo())
 
-        # 起床/上/下班打卡
+        # 上/下班打卡
         work_row = tk.Frame(self.card, bg=BG)
         work_row.pack(pady=(4, 0))
-        wake = tk.Label(work_row, text="☀️ 起床", bg=BG, fg=BLUE_DARK,
-                        font=(FONT, 9), cursor="hand2")
-        wake.pack(side="left", padx=8)
-        wake.bind("<Button-1>", self._on_wake)
         clock_in = tk.Label(work_row, text="🕘 上班", bg=BG, fg=BLUE_DARK,
                             font=(FONT, 9), cursor="hand2")
         clock_in.pack(side="left", padx=8)
@@ -292,16 +288,6 @@ class MiniPanel:
         self.refresh()
         if amount is None:
             self.stat_lbl.config(text="今天没有可撤销的记录")
-
-    def _on_wake(self, _event=None) -> None:
-        self.service.wake_up()
-        mt = self.service.morning_target()
-        self.service.notifier.show_message(
-            "早安 ☀️",
-            f"上班前这段建议喝约 {mt}ml，先来一杯吧 💧" if mt else "起床先喝一杯水 💧",
-        )
-        self._responded = True
-        self.refresh()
 
     def _on_clock_in(self, _event=None) -> None:
         """弹出预设菜单选择上班前喝了多少。"""

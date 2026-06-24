@@ -173,8 +173,11 @@
   .phase-label { font-size: 13px; color: var(--text); }
   .phase-ml { font-size: 15px; font-weight: 700; color: var(--blue-dark); white-space: nowrap; }
   .phase-bar-wrap { background: #e6edf6; border-radius: 6px; height: 8px; overflow: hidden; }
-  .phase-bar { height: 100%; background: linear-gradient(90deg, var(--blue), #74b9ff); }
+  .phase-bar { height: 100%; background: linear-gradient(90deg, var(--blue), #74b9ff); transition: width .4s ease; }
+  .phase-bar.ok { background: linear-gradient(90deg, var(--ok), #7fd6a8); }
   .phase-hint { font-size: 11px; color: var(--muted); }
+  .phase-side { font-size: 12px; color: var(--muted); margin-top: 12px;
+    padding-top: 10px; border-top: 1px dashed var(--line); }
 
   /* 上/下班 + 下班后安排 */
   .aw-big { font-size: 26px; font-weight: 700; color: var(--blue-dark); }
@@ -267,7 +270,6 @@
           <button class="ghost" onclick="recompute()">重算今日目标</button>
         </div>
         <div class="btns">
-          <button class="ghost" onclick="wakeUp()">☀️ 我起床了</button>
           <button class="ghost" onclick="clockInFlow()">🕘 我上班了</button>
           <button class="ghost" onclick="clockOutFlow()">🌙 我下班了</button>
         </div>
@@ -289,11 +291,10 @@
       <div id="afterWork"></div>
     </div>
 
-    <!-- 今日饮水安排(按时段) -->
+    <!-- 上班期间饮水进度 -->
     <div class="card" id="phasesWrap" style="display:none">
-      <h2>今日饮水安排（按时段）</h2>
+      <h2>上班期间饮水进度</h2>
       <div id="phases" class="phase-list"></div>
-      <div class="muted-note">全天目标按上班前 / 上班时段 / 下班后分配；你主要在上班时段统计，照这个时段的量喝即可。</div>
     </div>
 
     <!-- 近 7 天 -->
@@ -555,15 +556,21 @@ function renderStatus(s) {
 function renderPhases(s) {
   const ph = s.phases || [];
   const wrap = $("phasesWrap");
-  if (!ph.length) { wrap.style.display = "none"; return; }
+  if (ph.length < 3) { wrap.style.display = "none"; return; }
   wrap.style.display = "";
-  const max = Math.max(...ph.map(p => p.ml || 0), 1);
-  $("phases").innerHTML = ph.map(p => `
-    <div class="phase-item">
-      <div class="phase-top"><span class="phase-label">${esc(p.label)}</span><span class="phase-ml">${p.ml} ml</span></div>
-      <div class="phase-bar-wrap"><div class="phase-bar" style="width:${Math.round((p.ml || 0) / max * 100)}%"></div></div>
-      ${p.hint ? `<div class="phase-hint">${esc(p.hint)}</div>` : ""}
-    </div>`).join("");
+  const before = ph[0], during = ph[1], after = ph[2];
+  const done = during.done || 0, plan = during.ml || 0;
+  const pct = plan ? Math.min(100, Math.round(done / plan * 100)) : 0;
+  const ok = plan > 0 && done >= plan;
+  const left = Math.max(0, plan - done);
+  $("phases").innerHTML =
+    `<div class="phase-item">
+       <div class="phase-top"><span class="phase-label">上班期间</span>
+         <span class="phase-ml">${done} / ${plan} ml${ok ? " ✓" : ""}</span></div>
+       <div class="phase-bar-wrap"><div class="phase-bar${ok ? " ok" : ""}" style="width:${pct}%"></div></div>
+       <div class="phase-hint">${ok ? "上班期间目标已达成 👍" : `还差 ${left} ml，每 1–2 小时一杯`}</div>
+     </div>
+     <div class="phase-side">上班前已喝 ${before.done || 0}ml（建议 ${before.ml || 0}）· 下班后建议 ${after.ml || 0}ml</div>`;
 }
 
 function esc(t) {
@@ -659,12 +666,6 @@ function modalPickCustom() {
 }
 
 let _quickAmounts = [100, 150, 200, 250];
-async function wakeUp() {
-  const s = await api("/api/wake", "POST", {});
-  renderStatus(s);
-  const mt = s.morning_target || 0;
-  showToast(mt > 0 ? `早安☀️ 上班前这段建议喝约 ${mt}ml，先来一杯吧` : "早安☀️ 起床先喝一杯水");
-}
 function clockInFlow() {
   const opts = [{ label: "没喝", value: 0 }].concat(_quickAmounts.map(a => ({ label: a + "ml", value: a })));
   openChooser("上班前喝了多少？", opts, async (ml) => {
@@ -687,7 +688,6 @@ function renderWork(s) {
   const w = s.work || {};
   const st = $("workState");
   const parts = [];
-  if (w.wake) parts.push(`起床 ${w.wake}`);
   if (w.clock_in) parts.push(`上班 ${w.clock_in}` + (w.pre_ml ? `（前 ${w.pre_ml}ml）` : ""));
   if (w.clock_out) parts.push(`下班 ${w.clock_out}`);
   st.textContent = parts.join(" · ");

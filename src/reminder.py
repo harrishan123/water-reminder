@@ -38,6 +38,14 @@ def _in_time_window(t: time, start: time, end: time) -> bool:
     return t >= start or t <= end
 
 
+def _hm_to_min(hm: str) -> int | None:
+    try:
+        h, m = str(hm).split(":")
+        return int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+
+
 class AppService:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -55,8 +63,8 @@ class AppService:
         self._cached_temp_day: date | None = None  # 气温缓存对应的日期(跨天失效)
         self._report_cache: dict[tuple, str] = {}  # 报告缓存 {(kind, 日期): 文本}
         self._plan: dict | None = None  # 当日健康方案缓存(目标/建议/提醒文案)
-        self._work: dict = {"day": None, "wake": None, "clock_in": None, "pre_ml": 0,
-                            "clock_out": None, "after_work": None}  # 起床/上/下班打卡(按天)
+        self._work: dict = {"day": None, "clock_in": None, "pre_ml": 0,
+                            "clock_out": None, "after_work": None}  # 上/下班打卡(按天)
 
     # ---------- 生命周期 ----------
     def start(self) -> None:
@@ -126,10 +134,36 @@ class AppService:
             plan["note"] = "固定目标" + (f"；{base}" if base else "")
 
         plan["day"] = date.today().isoformat()
+        plan["phases"] = self._phase_split(int(plan["goal_ml"]))  # 结合已知的起床时间分段
         self.storage.set_goal(int(plan["goal_ml"]), note=plan.get("note", ""))
         self.storage.set_plan(json.dumps(plan, ensure_ascii=False))
         log.info("今日目标: %sml (%s)", plan["goal_ml"], plan.get("note", ""))
         return plan
+
+    def _phase_split(self, goal: int) -> list:
+        """按活跃时段与(已记录的)起床/睡觉时间，把目标分配到上班前/时段/下班后。"""
+        return goal_mod.split_phases(
+            goal,
+            str(self.cfg.get("reminder.active_start", "") or ""),
+            str(self.cfg.get("reminder.active_end", "") or ""),
+            self._work.get("wake") or "",
+        )
+
+    def _phases_with_actual(self, phases: list) -> list:
+        """给每段附上今日实际已喝量(done)：按记录时间落在 上班前/时段/下班后 哪一段。"""
+        out = [dict(p) for p in phases]
+        a = _hm_to_min(self.cfg.get("reminder.active_start", "")) or 9 * 60
+        e = _hm_to_min(self.cfg.get("reminder.active_end", "")) or 22 * 60
+        sums = [0, 0, 0]
+        for it in self.storage.list_intakes():
+            t = _hm_to_min(it.get("time", ""))
+            if t is None:
+                continue
+            idx = 0 if t < a else (1 if t < e else 2)
+            sums[idx] += int(it.get("amount_ml", 0))
+        for i, p in enumerate(out):
+            p["done"] = sums[i] if i < len(sums) else 0
+        return out
 
     def recompute_goal(self) -> int:
         """清空今日方案与气温缓存并重新计算(供托盘/网页「重算目标」调用)。"""
@@ -196,35 +230,22 @@ class AppService:
 
     # ---------- 上/下班打卡 ----------
     def _roll_work_day(self) -> None:
-        """跨天清空起床/上/下班打卡状态。"""
+        """跨天清空上/下班打卡状态。"""
         today = date.today().isoformat()
         if self._work.get("day") != today:
-            self._work = {"day": today, "wake": None, "clock_in": None, "pre_ml": 0,
+            self._work = {"day": today, "clock_in": None, "pre_ml": 0,
                           "clock_out": None, "after_work": None}
 
-    def wake_up(self) -> dict:
-        """打卡起床：记录起床时间。返回含 morning_target(上班前建议量) 的状态。"""
-        self._roll_work_day()
-        self._work["wake"] = datetime.now().strftime("%H:%M")
-        log.info("打卡起床 %s", self._work["wake"])
-        return self.work_status()
-
-    def morning_target(self) -> int:
-        """上班前(第一段)建议饮水量，取自当日方案的 phases[0]。"""
-        phases = self.today_plan().get("phases") or []
-        if phases:
-            try:
-                return int(phases[0].get("ml", 0))
-            except (TypeError, ValueError):
-                return 0
-        return 0
-
     def clock_in(self, pre_work_ml: int = 0) -> dict:
-        """打卡上班：把上班前喝的量记入今日总量，记录上班时间。"""
+        """打卡上班：把上班前喝的量按"上班前"时间记入(归到上班前时段)，记录上班时间。"""
         self._roll_work_day()
         pre = max(0, int(pre_work_ml or 0))
         if pre > 0:
-            self.storage.add_intake(pre)
+            # 这杯是上班前喝的，时间戳放在活跃时段开始之前，确保归到"上班前"段
+            a = _hm_to_min(self.cfg.get("reminder.active_start", "")) or 9 * 60
+            mins = max(0, a - 1)
+            when = datetime.now().replace(hour=mins // 60, minute=mins % 60, second=0, microsecond=0)
+            self.storage.add_intake(pre, when=when)
             self._report_cache.clear()
         self._work["clock_in"] = datetime.now().strftime("%H:%M")
         self._work["pre_ml"] = pre
@@ -279,9 +300,8 @@ class AppService:
             "hourly": self.storage.hourly_distribution(),
             "interval_minutes": int(self.cfg.get("reminder.interval_minutes", 60)),
             "goal_note": info["note"],
-            "phases": plan.get("phases", []),  # 全天目标按 上班前/时段/后 的分配
-            "morning_target": int(plan.get("phases", [{}])[0].get("ml", 0)) if plan.get("phases") else 0,
-            "work": self.work_status(),  # 起床/上/下班打卡状态
+            "phases": self._phases_with_actual(plan.get("phases", [])),  # 各段计划+实际已喝
+            "work": self.work_status(),  # 上/下班打卡状态
             "quick_amounts": [int(v) for v in (self.cfg.get("reminder.quick_amounts", []) or [])
                               if str(v).isdigit()][:4],
             "weather": {

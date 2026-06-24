@@ -53,11 +53,6 @@ def create_app(service) -> Flask:
         amount = service.undo_last_drink()
         return jsonify({"undone": amount, **service.status()})
 
-    @app.route("/api/wake", methods=["POST"])
-    def api_wake():
-        service.wake_up()
-        return jsonify(service.status())
-
     @app.route("/api/clock-in", methods=["POST"])
     def api_clock_in():
         data = request.get_json(silent=True) or {}

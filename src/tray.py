@@ -38,7 +38,6 @@ class Tray:
             pystray.MenuItem("打开小面板", self._activate),
             pystray.MenuItem("喝一杯", self._on_drink),
             pystray.MenuItem("撤销上一杯", self._on_undo),
-            pystray.MenuItem("我起床了", self._on_wake),
             pystray.MenuItem("我上班了", pystray.Menu(
                 pystray.MenuItem("上班前：没喝", self._clock_in_action(0)),
                 pystray.MenuItem("上班前：200ml", self._clock_in_action(200)),
@@ -99,15 +98,6 @@ class Tray:
 
     def _on_undo(self, icon, item) -> None:
         self.service.undo_last_drink()
-        self._refresh()
-
-    def _on_wake(self, icon, item) -> None:
-        self.service.wake_up()
-        mt = self.service.morning_target()
-        self.service.notifier.show_message(
-            "早安 ☀️",
-            f"上班前这段建议喝约 {mt}ml，先来一杯吧 💧" if mt else "起床先喝一杯水 💧",
-        )
         self._refresh()
 
     def _clock_in_action(self, ml: int):
