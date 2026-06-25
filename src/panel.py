@@ -15,7 +15,6 @@ import logging
 import queue
 import threading
 import tkinter as tk
-from tkinter import simpledialog
 
 log = logging.getLogger("water.panel")
 
@@ -290,22 +289,15 @@ class MiniPanel:
             self.stat_lbl.config(text="今天没有可撤销的记录")
 
     def _on_clock_in(self, _event=None) -> None:
-        """弹出预设菜单选择上班前喝了多少。"""
+        """弹出预设菜单选择上班前喝了多少(小面板用预设；要填任意数值用网页控制面板)。"""
         menu = tk.Menu(self.root, tearoff=0)
-        for ml in (0, 200, 350, 500):
+        for ml in (0, 100, 200, 350, 500):
             label = "没喝" if ml == 0 else f"{ml}ml"
             menu.add_command(label=f"上班前 {label}", command=lambda v=ml: self._do_clock_in(v))
-        menu.add_separator()
-        menu.add_command(label="自定义…", command=self._clock_in_custom)
         try:
             menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
         finally:
             menu.grab_release()
-
-    def _clock_in_custom(self) -> None:
-        ml = simpledialog.askinteger("上班打卡", "上班前喝了多少 ml？", parent=self.root, minvalue=0, maxvalue=3000)
-        if ml is not None:
-            self._do_clock_in(ml)
 
     def _do_clock_in(self, ml: int) -> None:
         self.service.clock_in(ml)
