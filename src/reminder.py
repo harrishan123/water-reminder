@@ -327,9 +327,13 @@ class AppService:
 
         fresh = load_config()
         self.cfg.replace(fresh.data)
-        # 体重/健康状况等可能变了，清掉今日方案缓存，下次按新配置重算
+        # AI 配置(启用/key/model/base_url/wire_api)可能变了，重建客户端才能即时生效
+        self.ai = build_client(self.cfg)
+        # 体重/健康状况/天气等可能变了，清掉今日方案与气温缓存，下次按新配置重算
         self.storage.clear_plan()
         self._plan = None
+        self._cached_temp = None
+        self._cached_temp_day = None
         self._report_cache.clear()
         self._reschedule()
         log.info("配置已重新加载并应用")

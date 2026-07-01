@@ -92,6 +92,19 @@ def create_app(service) -> Flask:
         goal = service.recompute_goal()
         return jsonify({"goal": goal})
 
+    @app.route("/api/ai/test", methods=["POST"])
+    def api_ai_test():
+        """实测 AI 是否真的能调通(不只是看配置开没开)。"""
+        if not service.ai.is_enabled():
+            return jsonify({"ok": False, "enabled": False,
+                            "reply": "AI 未启用：请在设置里开启 AI 并填好 api_key"})
+        try:
+            reply = service.ai.chat("用一句话简短回复。", "连通测试，请回复：可以")
+            return jsonify({"ok": bool(reply), "enabled": True,
+                            "reply": reply or "(返回为空，网关/模型可能异常，可稍后重试或换模型)"})
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"ok": False, "enabled": True, "reply": f"调用出错：{exc}"})
+
     @app.route("/api/report/<kind>", methods=["POST"])
     def api_report(kind):
         data = request.get_json(silent=True) or {}

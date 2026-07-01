@@ -237,7 +237,9 @@
       <h1><span class="drop">💧</span> 喝水提醒</h1>
       <div class="header-right">
         <span id="verTag" class="badge" style="background:#eef3fb;color:#7a8aa0"></span>
-        <span id="aiBadge" class="badge off">AI 未启用</span>
+        <span id="aiBadge" class="badge off" style="cursor:pointer" title="点击测试 AI 是否跑通" onclick="testAI()">AI 未启用</span>
+        <a class="nav-btn" onclick="refreshAll()">🔄 刷新</a>
+        <a class="nav-btn" onclick="testAI()">🔍 测试AI</a>
         <a class="nav-btn" onclick="showPage('settings')">⚙ 设置</a>
       </div>
     </header>
@@ -606,6 +608,25 @@ function renderBars(week) {
 }
 
 async function refresh() { renderStatus(await api("/api/status")); }
+
+async function refreshAll() {
+  await refresh(); await loadHistory();
+  showToast("已刷新");
+}
+
+async function testAI() {
+  showToast("正在测试 AI…");
+  try {
+    const r = await api("/api/ai/test", "POST", {});
+    if (r.ok) {
+      showToast("✅ AI 正常：" + (r.reply || "").slice(0, 24));
+    } else {
+      showToast("❌ AI 未跑通：" + (r.reply || "").slice(0, 40));
+    }
+  } catch (e) {
+    showToast("❌ 测试失败，程序可能未响应");
+  }
+}
 
 async function loadHistory() {
   const r = await api("/api/history");
